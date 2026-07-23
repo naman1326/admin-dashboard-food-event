@@ -31,8 +31,9 @@ export default function App() {
       setParticipants(data.participants)
       setCheckpoints(data.checkpoints)
       setScans(data.scans)
-    } catch {
-      setLoadError('Could not load data — check your connection and reload')
+    } catch (err) {
+      console.error(err)
+      setLoadError(err.message)
     } finally {
       setLoading(false)
     }

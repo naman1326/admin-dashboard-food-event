@@ -19,14 +19,29 @@ export const supabase = configError ? null : createClient(supabaseUrl, supabaseA
 // would need `.range()` paging if this ever grows well beyond that.
 export async function fetchAll() {
   const [participants, checkpoints, scans] = await Promise.all([
-    supabase.from('participants').select('id, token, name, reg_no'),
-    supabase.from('checkpoints').select('id, code, label, sort_order').eq('is_active', true).order('sort_order'),
-    supabase.from('scans').select('id, participant_id, checkpoint_id, scanned_at, method, device_label'),
+    supabase.rpc('admin_get_participants', {
+      p_admin_password: adminPassword
+    }),
+
+    supabase
+      .from('checkpoints')
+      .select('id, code, label, sort_order')
+      .eq('is_active', true)
+      .order('sort_order'),
+
+    supabase
+      .from('scans')
+      .select('id, participant_id, checkpoint_id, scanned_at, method, device_label')
   ])
   if (participants.error) throw participants.error
   if (checkpoints.error) throw checkpoints.error
   if (scans.error) throw scans.error
-  return { participants: participants.data, checkpoints: checkpoints.data, scans: scans.data }
+
+  return {
+    participants: participants.data,
+    checkpoints: checkpoints.data,
+    scans: scans.data
+  }
 }
 
 export function subscribeToScans(onEvent) {
@@ -45,9 +60,10 @@ export function subscribeToScans(onEvent) {
 
 export async function adminConfirm(token, checkpointCode, note) {
   const { data, error } = await supabase.rpc('admin_confirm_checkpoint', {
+    p_admin_password: adminPassword,
     p_token: token,
     p_checkpoint_code: checkpointCode,
-    p_note: note || null,
+    p_note: note || null
   })
   if (error) {
     console.error('admin_confirm_checkpoint error:', error)
@@ -58,9 +74,10 @@ export async function adminConfirm(token, checkpointCode, note) {
 
 export async function adminUndo(token, checkpointCode, note) {
   const { data, error } = await supabase.rpc('admin_undo_checkpoint', {
+    p_admin_password: adminPassword,
     p_token: token,
     p_checkpoint_code: checkpointCode,
-    p_note: note,
+    p_note: note
   })
   if (error) {
     console.error('admin_undo_checkpoint error:', error)
@@ -70,21 +87,31 @@ export async function adminUndo(token, checkpointCode, note) {
 }
 
 export async function fetchAdminActions() {
-  const { data, error } = await supabase
-    .from('admin_actions')
-    .select(`
-      id,
-      action,
-      participant_id,
-      checkpoint_id,
-      note,
-      created_at,
-      participants(name, reg_no),
-      checkpoints(code, label)
-    `)
-    .order('created_at', { ascending: false })
+  const { data, error } = await supabase.rpc(
+    'admin_get_actions',
+    {
+      p_admin_password: adminPassword
+    }
+  )
+
   if (error) throw error
-  return data
+
+  return data.map(row => ({
+    id: row.id,
+    action: row.action,
+    participant_id: row.participant_id,
+    checkpoint_id: row.checkpoint_id,
+    note: row.note,
+    created_at: row.created_at,
+    participants: {
+      name: row.participant_name,
+      reg_no: row.participant_reg_no
+    },
+    checkpoints: {
+      code: row.checkpoint_code,
+      label: row.checkpoint_label
+    }
+  }))
 }
 
 export async function clearAdminActions() {
