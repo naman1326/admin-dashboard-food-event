@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchAdminActions, clearAdminActions } from '../supabaseClient.js'
+import { prepareLogsExportData, exportToCsv, exportToXlsx, getExportFilename } from '../exportUtils.js'
 
 export default function LogsView() {
   const [logs, setLogs] = useState([])
@@ -7,6 +8,8 @@ export default function LogsView() {
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('all') // 'all', 'confirm', 'undo'
+  const [isExportOpen, setIsExportOpen] = useState(false)
+  const exportRef = useRef(null)
 
   async function loadLogs() {
     setLoading(true)
@@ -25,6 +28,31 @@ export default function LogsView() {
   useEffect(() => {
     loadLogs()
   }, [])
+
+  useEffect(() => {
+    if (!isExportOpen) return
+    function handleClickOutside(e) {
+      if (exportRef.current && !exportRef.current.contains(e.target)) {
+        setIsExportOpen(false)
+      }
+    }
+    window.addEventListener('click', handleClickOutside)
+    return () => window.removeEventListener('click', handleClickOutside)
+  }, [isExportOpen])
+
+  async function handleExportLogsXlsx(dataToExport = filteredLogs) {
+    const logsData = prepareLogsExportData(dataToExport)
+    const filename = getExportFilename('override_logs', 'xlsx')
+    await exportToXlsx(filename, { logsData })
+    setIsExportOpen(false)
+  }
+
+  function handleExportLogsCsv(dataToExport = filteredLogs) {
+    const logsData = prepareLogsExportData(dataToExport)
+    const filename = getExportFilename('override_logs', 'csv')
+    exportToCsv(filename, logsData.headers, logsData.rows)
+    setIsExportOpen(false)
+  }
 
   async function handleClearLogs() {
     if (!window.confirm('Are you absolutely sure you want to clear all override logs? This cannot be undone.')) {
@@ -86,6 +114,44 @@ export default function LogsView() {
         </div>
 
         <div className="logs-header-actions">
+          <div className="export-btn-container" ref={exportRef}>
+            <button
+              type="button"
+              className={`logs-action-btn refresh-btn ${isExportOpen ? 'is-active' : ''}`}
+              onClick={() => setIsExportOpen((prev) => !prev)}
+              disabled={loading || logs.length === 0}
+              title="Export logs as Excel or CSV"
+            >
+              Export Logs ▾
+            </button>
+            {isExportOpen && (
+              <div className="export-menu-dropdown">
+                <div className="export-menu-section-header">Export Logs ({filteredLogs.length})</div>
+                <button
+                  type="button"
+                  className="export-menu-item"
+                  onClick={() => handleExportLogsXlsx(filteredLogs)}
+                >
+                  <span className="export-item-badge xlsx-badge">XLSX</span>
+                  <div className="export-item-text">
+                    <span className="export-item-title">Excel Spreadsheet (.xlsx)</span>
+                    <span className="export-item-desc">{filteredLogs.length} logs with notes</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className="export-menu-item"
+                  onClick={() => handleExportLogsCsv(filteredLogs)}
+                >
+                  <span className="export-item-badge csv-badge">CSV</span>
+                  <div className="export-item-text">
+                    <span className="export-item-title">CSV File (.csv)</span>
+                    <span className="export-item-desc">{filteredLogs.length} logs with notes</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className="logs-action-btn refresh-btn"

@@ -85,6 +85,24 @@ check(
 )
 
 check(
+  'ANY_TICKED catches Asha and Vikram (any counter ticked)',
+  filterRows(grid, checkpoints, { filter: FILTERS.ANY_TICKED }).map((r) => r.name),
+  ['Asha Rao', 'Vikram Iyer']
+)
+
+check(
+  'ONLY_ONE catches only Asha (exactly one counter ticked)',
+  filterRows(grid, checkpoints, { filter: FILTERS.ONLY_ONE }).map((r) => r.name),
+  ['Asha Rao']
+)
+
+check(
+  'PARTIALLY_DONE catches Asha (started but not all checkpoints done)',
+  filterRows(grid, checkpoints, { filter: FILTERS.PARTIALLY_DONE }).map((r) => r.name),
+  ['Asha Rao']
+)
+
+check(
   'query and filter combine (AND, not OR)',
   filterRows(grid, checkpoints, { query: 'vikram', filter: FILTERS.NOT_ENTERED }).map((r) => r.name),
   [] // Vikram matches the name but not the filter, so nothing should match
@@ -108,6 +126,11 @@ check(
   afterDelete.map((s) => s.id),
   [100, 102]
 )
+
+const afterUpdate = applyScanEvent(scans, 'UPDATE', {
+  new: { id: 100, participant_id: 10, checkpoint_id: 1, scanned_at: '2026-07-12T10:00:00Z', method: 'manual' }
+})
+check('UPDATE modifies matching scan by id', afterUpdate.find((s) => s.id === 100)?.method, 'manual')
 
 check('original scans array is never mutated', scans.length, 3)
 

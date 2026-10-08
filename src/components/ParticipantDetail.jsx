@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { adminConfirm, adminUndo } from '../supabaseClient.js'
 import { formatScanTime } from '../dashboardLogic.js'
 
-export default function ParticipantDetail({ participant, onClose }) {
+export default function ParticipantDetail({ participant, onClose, onSync }) {
   const [busyCode, setBusyCode] = useState(null)
   const [noteDrafts, setNoteDrafts] = useState({})
   const [feedback, setFeedback] = useState(null) // { code, message, isError }
@@ -13,6 +13,7 @@ export default function ParticipantDetail({ participant, onClose }) {
     setBusyCode(null)
     if (result.status === 'confirmed') {
       setFeedback({ code: checkpointCode, message: 'Marked as done', isError: false })
+      if (onSync) onSync()
     } else if (result.status === 'duplicate') {
       setFeedback({ code: checkpointCode, message: 'Already marked — no change made', isError: false })
     } else {
@@ -32,6 +33,7 @@ export default function ParticipantDetail({ participant, onClose }) {
     if (result.status === 'undone') {
       setFeedback({ code: checkpointCode, message: 'Undone', isError: false })
       setNoteDrafts((prev) => ({ ...prev, [checkpointCode]: '' }))
+      if (onSync) onSync()
     } else if (result.status === 'nothing_to_undo') {
       setFeedback({ code: checkpointCode, message: 'Nothing to undo — it was never scanned', isError: false })
     } else {

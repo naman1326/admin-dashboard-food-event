@@ -23,8 +23,10 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [flashIds, setFlashIds] = useState(new Set())
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const [liveStatus, setLiveStatus] = useState('connecting')
+
+  const load = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true)
     setLoadError(null)
     try {
       const data = await fetchAll()
@@ -33,34 +35,66 @@ export default function App() {
       setScans(data.scans)
     } catch (err) {
       console.error(err)
-      setLoadError(err.message)
+      if (!isSilent) setLoadError(err.message)
     } finally {
-      setLoading(false)
+      if (!isSilent) setLoading(false)
     }
   }, [])
 
   const isLogsPage = window.location.search === '?page=logs'
 
   useEffect(() => {
-    if (authed && !isLogsPage) load()
+    if (authed && !isLogsPage) load(false)
   }, [authed, load, isLogsPage])
 
   useEffect(() => {
     if (!authed || isLogsPage) return undefined
-    return subscribeToScans((eventType, payload) => {
-      setScans((prev) => applyScanEvent(prev, eventType, payload))
-      const pid = eventType === 'INSERT' ? payload.new?.participant_id : payload.old?.participant_id
-      if (!pid) return
-      setFlashIds((prev) => new Set(prev).add(pid))
-      setTimeout(() => {
-        setFlashIds((prev) => {
-          const next = new Set(prev)
-          next.delete(pid)
-          return next
-        })
-      }, FLASH_MS)
-    })
-  }, [authed, isLogsPage])
+
+    const unsubscribe = subscribeToScans(
+      (eventType, payload) => {
+        setScans((prev) => applyScanEvent(prev, eventType, payload))
+        const pid = eventType === 'INSERT' ? payload.new?.participant_id : payload.old?.participant_id
+        if (!pid) return
+        setFlashIds((prev) => new Set(prev).add(pid))
+        setTimeout(() => {
+          setFlashIds((prev) => {
+            const next = new Set(prev)
+            next.delete(pid)
+            return next
+          })
+        }, FLASH_MS)
+      },
+      (status) => {
+        if (status === 'SUBSCRIBED') {
+          setLiveStatus('connected')
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setLiveStatus('disconnected')
+          load(true)
+        } else {
+          setLiveStatus('connecting')
+        }
+      }
+    )
+
+    // Periodic sync every 30 seconds sends read calls to the database and keeps stats fresh
+    const interval = setInterval(() => {
+      load(true)
+    }, 30000)
+
+    // Send read call to refresh data when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        load(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      unsubscribe()
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [authed, isLogsPage, load])
 
   const grid = useMemo(() => buildGrid(participants, checkpoints, scans), [participants, checkpoints, scans])
   const stats = useMemo(() => computeStats(grid, checkpoints), [grid, checkpoints])
@@ -96,7 +130,16 @@ export default function App() {
 
   return (
     <div className="dashboard">
-      <DashboardHeader stats={stats} checkpoints={checkpoints} onRefresh={load} loading={loading} />
+      <DashboardHeader
+        stats={stats}
+        checkpoints={checkpoints}
+        onRefresh={load}
+        loading={loading}
+        liveStatus={liveStatus}
+        allRows={grid}
+        filteredRows={visibleRows}
+        scans={scans}
+      />
       <SearchFilterBar
         query={query}
         onQuery={setQuery}
@@ -117,7 +160,13 @@ export default function App() {
         />
       )}
 
-      {selectedRow && <ParticipantDetail participant={selectedRow} onClose={() => setSelectedId(null)} />}
+      {selectedRow && (
+        <ParticipantDetail
+          participant={selectedRow}
+          onClose={() => setSelectedId(null)}
+          onSync={() => load(true)}
+        />
+      )}
     </div>
   )
 }

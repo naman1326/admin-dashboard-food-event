@@ -12,16 +12,73 @@ export const configError =
 
 export const supabase = configError ? null : createClient(supabaseUrl, supabaseAnonKey)
 
-// Fetched once on load. At this event's scale (hundreds of participants,
-// a few thousand scans at most) pulling everything up front and keeping it
-// in memory is simpler and faster than paginating — PostgREST's default
-// row cap is 1000, so this holds comfortably past 600 participants but
-// would need `.range()` paging if this ever grows well beyond that.
+export async function fetchAllScans() {
+  const PAGE_SIZE = 1000
+  const { data: firstPage, error, count } = await supabase
+    .from('scans')
+    .select('id, participant_id, checkpoint_id, scanned_at, method, device_label', { count: 'exact' })
+    .order('id', { ascending: true })
+    .range(0, PAGE_SIZE - 1)
+
+  if (error) throw error
+  if (!count || count <= PAGE_SIZE || (firstPage && firstPage.length < PAGE_SIZE)) {
+    return firstPage || []
+  }
+
+  const promises = []
+  for (let from = PAGE_SIZE; from < count; from += PAGE_SIZE) {
+    promises.push(
+      supabase
+        .from('scans')
+        .select('id, participant_id, checkpoint_id, scanned_at, method, device_label')
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+    )
+  }
+
+  const results = await Promise.all(promises)
+  const allScans = [...(firstPage || [])]
+  for (const res of results) {
+    if (res.error) throw res.error
+    if (res.data) allScans.push(...res.data)
+  }
+
+  return allScans
+}
+
+export async function fetchAllParticipants() {
+  const PAGE_SIZE = 1000
+  const { data: firstPage, error, count } = await supabase
+    .rpc('admin_get_participants', { p_admin_password: adminPassword }, { count: 'exact' })
+    .range(0, PAGE_SIZE - 1)
+
+  if (error) throw error
+  if (!count || count <= PAGE_SIZE || (firstPage && firstPage.length < PAGE_SIZE)) {
+    return firstPage || []
+  }
+
+  const promises = []
+  for (let from = PAGE_SIZE; from < count; from += PAGE_SIZE) {
+    promises.push(
+      supabase
+        .rpc('admin_get_participants', { p_admin_password: adminPassword })
+        .range(from, from + PAGE_SIZE - 1)
+    )
+  }
+
+  const results = await Promise.all(promises)
+  const all = [...(firstPage || [])]
+  for (const res of results) {
+    if (res.error) throw res.error
+    if (res.data) all.push(...res.data)
+  }
+
+  return all
+}
+
 export async function fetchAll() {
   const [participants, checkpoints, scans] = await Promise.all([
-    supabase.rpc('admin_get_participants', {
-      p_admin_password: adminPassword
-    }),
+    fetchAllParticipants(),
 
     supabase
       .from('checkpoints')
@@ -29,31 +86,26 @@ export async function fetchAll() {
       .eq('is_active', true)
       .order('sort_order'),
 
-    supabase
-      .from('scans')
-      .select('id, participant_id, checkpoint_id, scanned_at, method, device_label')
+    fetchAllScans()
   ])
-  if (participants.error) throw participants.error
   if (checkpoints.error) throw checkpoints.error
-  if (scans.error) throw scans.error
 
   return {
-    participants: participants.data,
+    participants,
     checkpoints: checkpoints.data,
-    scans: scans.data
+    scans
   }
 }
 
-export function subscribeToScans(onEvent) {
+export function subscribeToScans(onEvent, onStatusChange) {
   const channel = supabase
     .channel('admin-scans-feed')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'scans' }, (payload) =>
-      onEvent('INSERT', payload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'scans' }, (payload) =>
+      onEvent(payload.eventType, payload)
     )
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'scans' }, (payload) =>
-      onEvent('DELETE', payload)
-    )
-    .subscribe()
+    .subscribe((status, err) => {
+      if (onStatusChange) onStatusChange(status, err)
+    })
 
   return () => supabase.removeChannel(channel)
 }

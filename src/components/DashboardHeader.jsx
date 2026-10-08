@@ -1,4 +1,18 @@
-export default function DashboardHeader({ stats, checkpoints, onRefresh, loading }) {
+import ExportButton from './ExportButton.jsx'
+
+export default function DashboardHeader({
+  stats,
+  checkpoints,
+  onRefresh,
+  loading,
+  liveStatus = 'connected',
+  allRows = [],
+  filteredRows = [],
+  scans = [],
+}) {
+  const isConnecting = liveStatus === 'connecting'
+  const isDisconnected = liveStatus === 'disconnected'
+
   return (
     <header className="dash-header">
       <div className="dash-header-top">
@@ -10,10 +24,23 @@ export default function DashboardHeader({ stats, checkpoints, onRefresh, loading
           </div>
         </div>
         <div className="dash-actions">
-          <div className="live-indicator-container">
+          <div
+            className={`live-indicator-container ${isConnecting ? 'is-connecting' : isDisconnected ? 'is-disconnected' : ''}`}
+            title={isDisconnected ? 'Realtime disconnected — syncing via periodic read calls' : isConnecting ? 'Connecting to realtime feed...' : 'Connected to realtime feed'}
+          >
             <span className="live-dot"></span>
-            <span className="live-text">Live Status</span>
+            <span className="live-text">
+              {isDisconnected ? 'Offline (Syncing)' : isConnecting ? 'Connecting…' : 'Live Status'}
+            </span>
           </div>
+          <ExportButton
+            allRows={allRows}
+            filteredRows={filteredRows}
+            checkpoints={checkpoints}
+            scans={scans}
+            stats={stats}
+            disabled={loading}
+          />
           <button
             type="button"
             className="refresh-button logs-btn"
@@ -21,7 +48,7 @@ export default function DashboardHeader({ stats, checkpoints, onRefresh, loading
           >
             Override Logs
           </button>
-          <button type="button" className="refresh-button" onClick={onRefresh} disabled={loading}>
+          <button type="button" className="refresh-button" onClick={() => onRefresh(false)} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>

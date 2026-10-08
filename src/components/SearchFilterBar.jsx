@@ -2,6 +2,9 @@ import { FILTERS } from '../dashboardLogic.js'
 
 const FILTER_OPTIONS = [
   { value: FILTERS.ALL, label: 'All' },
+  { value: FILTERS.ANY_TICKED, label: 'At least 1 ticked' },
+  { value: FILTERS.ONLY_ONE, label: 'Only 1 ticked' },
+  { value: FILTERS.PARTIALLY_DONE, label: 'Partially done' },
   { value: FILTERS.NOT_ENTERED, label: 'Not entered' },
   { value: FILTERS.ENTERED_NO_FOOD, label: 'Entered, no food yet' },
   { value: FILTERS.FULLY_DONE, label: 'Fully done' },

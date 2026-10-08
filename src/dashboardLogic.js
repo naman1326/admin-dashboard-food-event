@@ -39,6 +39,9 @@ export function computeStats(gridRows, checkpoints) {
 
 export const FILTERS = {
   ALL: 'all',
+  ANY_TICKED: 'any_ticked',
+  ONLY_ONE: 'only_one',
+  PARTIALLY_DONE: 'partially_done',
   NOT_ENTERED: 'not_entered',
   ENTERED_NO_FOOD: 'entered_no_food',
   FULLY_DONE: 'fully_done',
@@ -69,12 +72,21 @@ export function filterRows(gridRows, checkpoints, { query = '', filter = FILTERS
     rows = rows.filter(
       (r) => r.checkpointStatus.length > 0 && r.checkpointStatus.every((cs) => cs.scan)
     )
+  } else if (filter === FILTERS.ANY_TICKED) {
+    rows = rows.filter((r) => r.checkpointStatus.some((cs) => cs.scan))
+  } else if (filter === FILTERS.ONLY_ONE) {
+    rows = rows.filter((r) => r.checkpointStatus.filter((cs) => cs.scan).length === 1)
+  } else if (filter === FILTERS.PARTIALLY_DONE) {
+    rows = rows.filter((r) => {
+      const doneCount = r.checkpointStatus.filter((cs) => cs.scan).length
+      return doneCount > 0 && doneCount < r.checkpointStatus.length
+    })
   }
 
   return rows
 }
 
-// Applies one realtime INSERT or DELETE event to a local scans array without
+// Applies one realtime INSERT, UPDATE, or DELETE event to a local scans array without
 // needing to refetch everything. Returns a new array (never mutates).
 export function applyScanEvent(scans, eventType, payload) {
   if (eventType === 'INSERT') {
@@ -83,6 +95,9 @@ export function applyScanEvent(scans, eventType, payload) {
   }
   if (eventType === 'DELETE') {
     return scans.filter((s) => s.id !== payload.old.id)
+  }
+  if (eventType === 'UPDATE') {
+    return scans.map((s) => (s.id === payload.new.id ? payload.new : s))
   }
   return scans
 }
