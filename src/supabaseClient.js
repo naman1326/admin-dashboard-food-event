@@ -175,3 +175,73 @@ export async function clearAdminActions() {
   return data
 }
 
+export async function adminAddParticipants(participants) {
+  // First attempt RPC function
+  const { data, error } = await supabase.rpc('admin_add_participants', {
+    p_admin_password: adminPassword,
+    p_participants: participants,
+  })
+
+  if (!error) {
+    return data
+  }
+
+  // If RPC is missing (PGRST202), try direct table insert fallback
+  if (error.code === 'PGRST202') {
+    const { data: insertData, error: insertError } = await supabase
+      .from('participants')
+      .upsert(participants, { onConflict: 'token' })
+
+    if (!insertError) {
+      return { status: 'ok', count: participants.length }
+    }
+
+    const customErr = new Error(
+      'Supabase RPC function "admin_add_participants" is not installed. Please run db/07_participants_management.sql in the Supabase SQL editor.'
+    )
+    customErr.isRpcMissing = true
+    customErr.originalError = error
+    throw customErr
+  }
+
+  throw error
+}
+
+export async function adminDeleteAllParticipants() {
+  // First attempt RPC function
+  const { data, error } = await supabase.rpc('admin_delete_all_participants', {
+    p_admin_password: adminPassword,
+  })
+
+  if (!error) {
+    return data
+  }
+
+  // If RPC is missing (PGRST202), try direct delete fallback
+  if (error.code === 'PGRST202') {
+    try {
+      await supabase.from('scans').delete().neq('id', 0)
+      try {
+        await supabase.from('admin_actions').delete().neq('id', 0)
+      } catch {
+        // admin_actions might not exist
+      }
+      const { error: partErr } = await supabase.from('participants').delete().neq('id', 0)
+      if (!partErr) {
+        return { status: 'ok' }
+      }
+    } catch {
+      // ignore
+    }
+
+    const customErr = new Error(
+      'Supabase RPC function "admin_delete_all_participants" is not installed. Please run db/07_participants_management.sql in the Supabase SQL editor.'
+    )
+    customErr.isRpcMissing = true
+    customErr.originalError = error
+    throw customErr
+  }
+
+  throw error
+}
+

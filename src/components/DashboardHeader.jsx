@@ -9,6 +9,8 @@ export default function DashboardHeader({
   allRows = [],
   filteredRows = [],
   scans = [],
+  onOpenImport,
+  onOpenDelete,
 }) {
   const isConnecting = liveStatus === 'connecting'
   const isDisconnected = liveStatus === 'disconnected'
@@ -33,6 +35,15 @@ export default function DashboardHeader({
               {isDisconnected ? 'Offline (Syncing)' : isConnecting ? 'Connecting…' : 'Live Status'}
             </span>
           </div>
+          <button
+            type="button"
+            className="refresh-button import-participants-btn"
+            onClick={onOpenImport}
+            disabled={loading}
+            title="Import participants CSV, generate QRs, add to Supabase, and send emails"
+          >
+            📥 Import (CSV)
+          </button>
           <ExportButton
             allRows={allRows}
             filteredRows={filteredRows}
@@ -47,6 +58,15 @@ export default function DashboardHeader({
             onClick={() => window.open('?page=logs', '_blank', 'width=1000,height=700,noopener,noreferrer')}
           >
             Override Logs
+          </button>
+          <button
+            type="button"
+            className="refresh-button danger-header-btn"
+            onClick={onOpenDelete}
+            disabled={loading}
+            title="Delete all participants from the database"
+          >
+            🗑️ Delete All
           </button>
           <button type="button" className="refresh-button" onClick={() => onRefresh(false)} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}

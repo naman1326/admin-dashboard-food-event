@@ -5,6 +5,8 @@ import SearchFilterBar from './components/SearchFilterBar.jsx'
 import ParticipantGrid from './components/ParticipantGrid.jsx'
 import ParticipantDetail from './components/ParticipantDetail.jsx'
 import LogsView from './components/LogsView.jsx'
+import DeleteParticipantsModal from './components/DeleteParticipantsModal.jsx'
+import ParticipantImportModal from './components/ParticipantImportModal.jsx'
 import { configError, fetchAll, subscribeToScans } from './supabaseClient.js'
 import { buildGrid, computeStats, filterRows, applyScanEvent, FILTERS } from './dashboardLogic.js'
 
@@ -22,6 +24,8 @@ export default function App() {
   const [filter, setFilter] = useState(FILTERS.ALL)
   const [selectedId, setSelectedId] = useState(null)
   const [flashIds, setFlashIds] = useState(new Set())
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
 
   const [liveStatus, setLiveStatus] = useState('connecting')
 
@@ -139,6 +143,8 @@ export default function App() {
         allRows={grid}
         filteredRows={visibleRows}
         scans={scans}
+        onOpenImport={() => setIsImportModalOpen(true)}
+        onOpenDelete={() => setIsDeleteModalOpen(true)}
       />
       <SearchFilterBar
         query={query}
@@ -164,6 +170,22 @@ export default function App() {
         <ParticipantDetail
           participant={selectedRow}
           onClose={() => setSelectedId(null)}
+          onSync={() => load(true)}
+        />
+      )}
+
+      {isDeleteModalOpen && (
+        <DeleteParticipantsModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onDeleted={() => load(false)}
+        />
+      )}
+
+      {isImportModalOpen && (
+        <ParticipantImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
           onSync={() => load(true)}
         />
       )}
